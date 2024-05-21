@@ -1,0 +1,19 @@
+diff -ruN gdb-9.2/gdb/gdbsupport/pathstuff.c gdb-9.2-mingw/gdb/gdbsupport/pathstuff.c
+--- gdb-9.2/gdb/gdbsupport/pathstuff.c	2020-05-23 21:10:29 +0000
++++ gdb-9.2-mingw/gdb/gdbsupport/pathstuff.c	2020-08-26 14:10:06 +0000
+@@ -231,6 +231,15 @@
+ #endif
+ 
+   const char *home = getenv ("HOME");
++
++#ifdef WIN32
++  if (home == nullptr)
++    {
++      /* This is used when gdb was compiled in static mode on Windows.  */		
++      home = getenv ("USERPROFILE");
++    }
++#endif
++
+   if (home != NULL)
+     {
+       /* Make sure the path is absolute and tilde-expanded.  */

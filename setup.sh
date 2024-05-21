@@ -404,7 +404,7 @@ gnu_download_tool ()
       filename=$(ls ${target}.tar.*)
       if ${validate} && ! validate_file "${filename}" $(cat ${target}.sum)
       then
-        log_error "Download for ${target} does not match checksum in checksums.txt"
+        log_error "Download for ${target} does not match checksum in sha512.sum"
         return 1
       fi
 
@@ -433,11 +433,11 @@ gnu_download_tool ()
           log_error "Unable to locate ${target} on server"
           return 1
         fi
-        rm -f checksums.txt
-        touch checksums.txt
-        if download "${directory}/sha512.sum" "checksums.txt" "silent"
+        rm -f sha512.sum
+        touch sha512.sum
+        if download "${directory}/sha512.sum" "sha512.sum" "silent"
         then
-          output=$(grep "${target}.tar" checksums.txt)
+          output=$(grep -E "${target}(\.20[[:digit:]]{6})?.tar" sha512.sum)
           if [ "x${output}" != "x" ]
           then
             echo " found."
@@ -446,23 +446,32 @@ gnu_download_tool ()
         fi
       done
 
-      for line in $(grep "${target}.tar" checksums.txt | sed -e "s/\([0-9a-f]\{128\}\)  .*.tar.\([a-z]\{2,3\}\)/\1:\2/")
+#      for line in $(grep -E "${target}(\.20[[:digit:]]{6})?.tar" sha512.sum)
+#      do
+#      echo $line
+#      done
+# | tail -n 1 | sed -E -e "s/([0-9a-f]{128})\s+(${target}|${target}\.20[[:digit:]]{6})\.tar\.([a-z]{2,3})/\1:\2:\3/")
+#      for line in $(grep -E "${target}(\.20[[:digit:]]{6})?.tar" sha512.sum | tail -n 1 | sed -e "s/\([0-9a-f]\{128\}\)  (${target}(\.20[[:digit:]]{6})?).tar.\([a-z]\{2,3\}\)/\1:\2:\3/")
+      for line in $(grep -E "${target}(\.20[[:digit:]]{6})?.tar" sha512.sum | sed -E -e "s/([0-9a-f]{128})\s+(${target}|${target}\.20[[:digit:]]{6})\.tar\.([a-z]{2,3})/\1:\2:\3/")
       do
         this_sha512sum=$(echo "${line}" | cut -d ':' -f 1)
+        target=$(echo "${line}" | cut -d ':' -f 2)
 
-        case $(echo "${line}" | cut -d ':' -f 2) in
+        case $(echo "${line}" | cut -d ':' -f 3) in
           gz)
             if [ "x${filename}" = "x" ] && ${has_gzip}
             then
               sha512sum=${this_sha512sum}
               filename=${target}.tar.gz
+              break
             fi
           ;;
           bz2)
-          if ${has_bzip2}
-          then
-            sha512sum=${this_sha512sum}
-            filename=${target}.tar.bz2
+            if ${has_bzip2}
+            then
+              sha512sum=${this_sha512sum}
+              filename=${target}.tar.bz2
+              break
             fi
           ;;
           xz)
@@ -474,8 +483,6 @@ gnu_download_tool ()
             fi
           ;;
           *)
-            log_error "Parsing checksums.txt for ${target} from ${directory}"
-            return 1
           ;;
         esac
       done
@@ -489,14 +496,14 @@ gnu_download_tool ()
 
       if ${validate} && ! validate_file "${filename}" "${sha512sum}"
       then
-        log_error "Download for ${target} does not match checksum in checksums.txt"
+        log_error "Download for ${target} does not match checksum in sha512.sum"
         return 1
       elif ${validate}
       then
         echo "${checksum}" > ${target}.sum
       fi
 
-      rm -f checksums.txt
+      rm -f sha512.sum
 
       if ! unpack "${filename}"
       then

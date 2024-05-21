@@ -1,0 +1,147 @@
+diff --color -ruN gcc-4.7.4/gcc/config/sh/sh.h gcc-4.7.4-kos/gcc/config/sh/sh.h
+--- gcc-4.7.4/gcc/config/sh/sh.h	2023-06-04 20:55:00.700746950 -0500
++++ gcc-4.7.4-kos/gcc/config/sh/sh.h	2023-06-04 20:55:12.808785621 -0500
+@@ -93,6 +93,12 @@
+     builtin_define ("__FMOVD_ENABLED__"); \
+   builtin_define (TARGET_LITTLE_ENDIAN \
+ 		  ? "__LITTLE_ENDIAN__" : "__BIG_ENDIAN__"); \
++  /* Custom built-in defines for KallistiOS */ \
++  builtin_define ("__KOS_GCC_PATCHED__"); \
++  cpp_define_formatted (pfile, "__KOS_GCC_PATCHLEVEL__=%d", \
++			2023010200); \
++  /* Toolchain supports setting up stack for 32MB */ \
++  builtin_define ("__KOS_GCC_32MB__"); \
+ } while (0)
+ 
+ /* Value should be nonzero if functions must have frame pointers.
+diff --color -ruN gcc-4.7.4/gcc/configure gcc-4.7.4-kos/gcc/configure
+--- gcc-4.7.4/gcc/configure	2023-06-04 20:54:59.632743539 -0500
++++ gcc-4.7.4-kos/gcc/configure	2023-06-04 20:55:12.809785624 -0500
+@@ -11338,7 +11338,7 @@
+     target_thread_file='single'
+     ;;
+   aix | dce | lynx | mipssde | posix | rtems | \
+-  single | tpf | vxworks | win32)
++  single | tpf | vxworks | win32 | kos)
+     target_thread_file=${enable_threads}
+     ;;
+   *)
+diff --color -ruN gcc-4.7.4/gcc/cp/cfns.h gcc-4.7.4-kos/gcc/cp/cfns.h
+--- gcc-4.7.4/gcc/cp/cfns.h	2023-06-04 20:55:00.677746876 -0500
++++ gcc-4.7.4-kos/gcc/cp/cfns.h	2023-06-04 20:55:12.809785624 -0500
+@@ -53,6 +53,9 @@
+ static unsigned int hash (const char *, unsigned int);
+ #ifdef __GNUC__
+ __inline
++#ifdef __GNUC_STDC_INLINE__
++__attribute__ ((__gnu_inline__))
++#endif
+ #endif
+ const char * libc_name_p (const char *, unsigned int);
+ /* maximum key range = 391, duplicates = 0 */
+@@ -96,7 +99,7 @@
+       400, 400, 400, 400, 400, 400, 400, 400, 400, 400,
+       400, 400, 400, 400, 400, 400, 400
+     };
+-  register int hval = len;
++  register int hval = (int)len;
+ 
+   switch (hval)
+     {
+diff --color -ruN gcc-4.7.4/gcc/doc/gcc.texi gcc-4.7.4-kos/gcc/doc/gcc.texi
+--- gcc-4.7.4/gcc/doc/gcc.texi	2023-06-04 20:54:59.622743507 -0500
++++ gcc-4.7.4-kos/gcc/doc/gcc.texi	2023-06-04 20:55:12.810785628 -0500
+@@ -86,9 +86,9 @@
+ @item GNU Press
+ @tab Website: www.gnupress.org
+ @item a division of the
+-@tab General: @tex press@@gnu.org @end tex
++@tab General: @email{press@@gnu.org}
+ @item Free Software Foundation
+-@tab Orders:  @tex sales@@gnu.org @end tex
++@tab Orders:  @email{sales@@gnu.org}
+ @item 51 Franklin Street, Fifth Floor
+ @tab Tel 617-542-5942
+ @item Boston, MA 02110-1301 USA
+diff --color -ruN gcc-4.7.4/libgcc/config/sh/t-sh gcc-4.7.4-kos/libgcc/config/sh/t-sh
+--- gcc-4.7.4/libgcc/config/sh/t-sh	2023-06-04 20:54:59.531743216 -0500
++++ gcc-4.7.4-kos/libgcc/config/sh/t-sh	2023-06-04 20:55:12.810785628 -0500
+@@ -24,6 +24,8 @@
+   $(LIB1ASMFUNCS_CACHE)
+ LIB1ASMFUNCS_CACHE = _ic_invalidate _ic_invalidate_array
+ 
++LIB2ADD = $(srcdir)/config/sh/fake-kos.S
++
+ crt1.o: $(srcdir)/config/sh/crt1.S
+ 	$(gcc_compile) -c $<
+ 
+diff --color -ruN gcc-4.7.4/libgcc/configure gcc-4.7.4-kos/libgcc/configure
+--- gcc-4.7.4/libgcc/configure	2023-06-04 20:54:59.516743168 -0500
++++ gcc-4.7.4-kos/libgcc/configure	2023-06-04 20:55:12.810785628 -0500
+@@ -4480,6 +4480,7 @@
+     tpf)	thread_header=config/s390/gthr-tpf.h ;;
+     vxworks)	thread_header=config/gthr-vxworks.h ;;
+     win32)	thread_header=config/i386/gthr-win32.h ;;
++    kos)	thread_header=config/sh/gthr-kos.h ;;
+ esac
+ 
+ # Substitute configuration variables
+diff --color -ruN gcc-4.7.4/libobjc/Makefile.in gcc-4.7.4-kos/libobjc/Makefile.in
+--- gcc-4.7.4/libobjc/Makefile.in	2023-06-04 20:54:58.789740846 -0500
++++ gcc-4.7.4-kos/libobjc/Makefile.in	2023-06-04 20:55:12.810785628 -0500
+@@ -307,14 +307,16 @@
+ $(srcdir)/aclocal.m4: @MAINT@ $(aclocal_deps)
+ 	cd $(srcdir) && $(ACLOCAL) $(ACLOCAL_AMFLAGS)
+ 
+-install: install-libs install-headers
++install-strip: INSTALL_STRIP_FLAG = -s
++install install-strip: install-libs install-headers
+ 
+ install-libs: installdirs
+ 	$(SHELL) $(multi_basedir)/mkinstalldirs $(DESTDIR)$(toolexeclibdir)
+-	$(LIBTOOL_INSTALL) $(INSTALL) libobjc$(libsuffix).la $(DESTDIR)$(toolexeclibdir);
++	$(LIBTOOL_INSTALL) $(INSTALL) $(INSTALL_STRIP_FLAG) \
++	  libobjc$(libsuffix).la $(DESTDIR)$(toolexeclibdir);
+ 	if [ "$(OBJC_BOEHM_GC)" ]; then \
+-	  $(LIBTOOL_INSTALL) $(INSTALL) libobjc_gc$(libsuffix).la \
+-				$(DESTDIR)$(toolexeclibdir);\
++	  $(LIBTOOL_INSTALL) $(INSTALL) $(INSTALL_STRIP_FLAG) \
++	    libobjc_gc$(libsuffix).la $(DESTDIR)$(toolexeclibdir);\
+ 	fi
+ 	$(MULTIDO) $(FLAGS_TO_PASS) multi-do DO="$@"
+ 	@-$(LIBTOOL) --mode=finish $(DESTDIR)$(toolexeclibdir)
+@@ -327,7 +329,7 @@
+ 	  $(INSTALL_DATA) $${realfile} $(DESTDIR)$(libsubdir)/$(includedirname)/objc; \
+ 	done
+ 
+-check uninstall install-strip dist installcheck installdirs:
++check uninstall dist installcheck installdirs:
+ 
+ mostlyclean:
+ 	-$(LIBTOOL_CLEAN) rm -f libobjc$(libsuffix).la libobjc_gc$(libsuffix).la *.lo
+diff --color -ruN gcc-4.7.4/libstdc++-v3/config/cpu/sh/atomicity.h gcc-4.7.4-kos/libstdc++-v3/config/cpu/sh/atomicity.h
+--- gcc-4.7.4/libstdc++-v3/config/cpu/sh/atomicity.h	2023-06-04 20:55:00.998747901 -0500
++++ gcc-4.7.4-kos/libstdc++-v3/config/cpu/sh/atomicity.h	2023-06-04 20:55:12.810785628 -0500
+@@ -80,7 +80,12 @@
+ 
+ namespace 
+ {
+-  __gnu_cxx::__mutex atomic_mutex;
++  __gnu_cxx::__mutex&
++  get_atomic_mutex()
++  {
++    static __gnu_cxx::__mutex atomic_mutex;
++    return atomic_mutex;
++  }
+ } // anonymous namespace
+ 
+ namespace __gnu_cxx _GLIBCXX_VISIBILITY(default)
+@@ -91,7 +96,7 @@
+   __attribute__ ((__unused__))
+   __exchange_and_add(volatile _Atomic_word* __mem, int __val) throw ()
+   {
+-    __gnu_cxx::__scoped_lock sentry(atomic_mutex);
++    __gnu_cxx::__scoped_lock sentry(get_atomic_mutex());
+     _Atomic_word __result;
+     __result = *__mem;
+     *__mem += __val;
